@@ -21,7 +21,7 @@ namespace XiboClientWatchdog
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run();
+                Application.Run(new Tray());
 
                 // Release when we've stopped
                 mutex.ReleaseMutex();

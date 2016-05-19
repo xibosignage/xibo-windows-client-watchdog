@@ -28,6 +28,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using XiboClientWatchdog.Properties;
 
 namespace XiboClientWatchdog
 {
@@ -45,9 +46,10 @@ namespace XiboClientWatchdog
             FormClosing += Tray_FormClosing;
 
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-            
             WindowState = FormWindowState.Minimized;
             ShowInTaskbar = false;
+            MinimizeBox = false;
+            MaximizeBox = false;
 
             // Process any command line parameters
             ArgvConfigSource source = new ArgvConfigSource(Environment.GetCommandLineArgs());
@@ -58,10 +60,23 @@ namespace XiboClientWatchdog
             _watcher = new Watcher(source);
             _watcher.OnNotifyActivity += _watcher_OnNotifyActivity;
             _watcher.OnNotifyRestart += _watcher_OnNotifyRestart;
+            _watcher.OnNotifyError += _watcher_OnNotifyError;
 
             // Start a thread for the watcher
             _watchThread = new Thread(new ThreadStart(_watcher.Run));
             _watchThread.Start();
+
+            // Watch params
+            libraryLabel.Text = source.Configs["Main"].GetString("library", Settings.Default.ClientLibrary);
+            processLabel.Text = source.Configs["Main"].GetString("watch-process", Settings.Default.ProcessPath);
+        }
+
+        void _watcher_OnNotifyError(string message)
+        {
+            if (InvokeRequired)
+                BeginInvoke(new StatusDelegate(setErrorText), message);
+            else
+                setErrorText(message);
         }
 
         void _watcher_OnNotifyRestart(string message)
@@ -82,7 +97,7 @@ namespace XiboClientWatchdog
 
         void setLastActivityText(string message)
         {
-            toolStripLastActivity.Text = "Checked: " + DateTime.Now.ToString();
+            lastAccessedLabel.Text = "Checked: " + DateTime.Now.ToString();
         }
 
         void setRestartText(string message)
@@ -92,7 +107,15 @@ namespace XiboClientWatchdog
             showBalloon("Restarting", formattedMessage);
             
             // Also store on the tool strip
-            toolStripLastRestart.Text = formattedMessage;
+            lastRestartLabel.Text = formattedMessage;
+        }
+
+        void setErrorText(string message)
+        {
+            showBalloon("Error", message);
+
+            // Also store on the tool strip
+            errorTextBox.Text = message;
         }
 
         void showBalloon(string title, string message)
@@ -112,6 +135,18 @@ namespace XiboClientWatchdog
         {
             _watcher.Stop();
             Application.Exit();
+        }
+
+        private void toolStripMenuItem2_Click(object sender, EventArgs e)
+        {
+            WindowState = FormWindowState.Normal;
+            TopMost = true;
+        }
+
+        private void closeButton_Click(object sender, EventArgs e)
+        {
+            WindowState = FormWindowState.Minimized;
+            TopMost = false;
         }
     }
 }

@@ -49,6 +49,9 @@ namespace XiboClientWatchdog
         public delegate void OnNotifyRestartDelegate(string message);
         public event OnNotifyRestartDelegate OnNotifyRestart;
 
+        public delegate void OnNotifyErrorDelegate(string message);
+        public event OnNotifyErrorDelegate OnNotifyError;
+
         public Watcher(ArgvConfigSource config)
         {
             _config = config;
@@ -83,61 +86,77 @@ namespace XiboClientWatchdog
                         string clientLibrary = _config.Configs["Main"].GetString("library", Settings.Default.ClientLibrary);
                         string processPath = _config.Configs["Main"].GetString("watch-process", Settings.Default.ProcessPath);
 
-                        string status = null;
+                        // Check if my Xibo process is running.
+                        Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processPath));
 
-                        // Look in the Xibo library for the status.json file
-                        if (File.Exists(Path.Combine(clientLibrary, "status.json")))
+                        if (proc.Length <= 0)
                         {
-                            using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
-                            {
-                                status = reader.ReadToEnd();
-                            }
-                        }
-
-                        // Compare the last accessed date with the current date and threshold
-                        if (string.IsNullOrEmpty(status))
-                            throw new Exception("Unable to find status file in " + clientLibrary);
-
-                        // Load the status file in to a JSON string
-                        var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
-
-                        DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
-
-                        // Set up the threshold
-                        DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
-
-                        if (lastActive < threshold)
-                        {
-                            // We need to do something about this - client hasn't checked in recently enough
-
-                            // Check to see if XiboClient.exe is still running
-                            Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processPath));
-
-                            if (proc.Length > 0)
-                            {
-                                // Stop the exe's (kill them)
-                                foreach (Process process in proc)
-                                {
-                                    process.Kill();
-                                }
-                            }
-
-                            string message = string.Format("Client inactive with {0} processes", proc.Length);
-
-                            // Write message to log
+                            string message = "No active processes";
                             WriteToXiboLog(message);
 
                             // Notify message
                             if (OnNotifyRestart != null)
                                 OnNotifyRestart(message);
 
-                            // Start the exe's
                             Process.Start(processPath);
+                        }
+                        else
+                        {
+
+                            string status = null;
+
+                            // Look in the Xibo library for the status.json file
+                            if (File.Exists(Path.Combine(clientLibrary, "status.json")))
+                            {
+                                using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
+                                {
+                                    status = reader.ReadToEnd();
+                                }
+                            }
+
+                            // Compare the last accessed date with the current date and threshold
+                            if (string.IsNullOrEmpty(status))
+                                throw new Exception("Unable to find status file in " + clientLibrary);
+
+                            // Load the status file in to a JSON string
+                            var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
+
+                            DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
+
+                            // Set up the threshold
+                            DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
+
+                            if (lastActive < threshold)
+                            {
+                                // We need to do something about this - client hasn't checked in recently enough
+                                // Check to see if XiboClient.exe is still running
+                                if (proc.Length > 0)
+                                {
+                                    // Stop the exe's (kill them)
+                                    foreach (Process process in proc)
+                                    {
+                                        process.Kill();
+                                    }
+                                }
+
+                                string message = string.Format("Activity threshold exceeded. There are {0} processes", proc.Length);
+
+                                // Write message to log
+                                WriteToXiboLog(message);
+
+                                // Notify message
+                                if (OnNotifyRestart != null)
+                                    OnNotifyRestart(message);
+
+                                // Start the exe's
+                                Process.Start(processPath);
+                            }
                         }
                     }
                     catch (Exception e)
                     {
-                        Trace.WriteLine(e.Message);
+                        if (OnNotifyError != null)
+                            OnNotifyError(e.ToString());
                     }
 
                     if (OnNotifyActivity != null)

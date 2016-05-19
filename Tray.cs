@@ -1,4 +1,5 @@
-﻿/*
+﻿using Nini.Config;
+/*
  * Xibo - Digitial Signage - http://www.xibo.org.uk
  * Copyright (C) 2006 - 2014 Daniel Garner
  *
@@ -32,6 +33,8 @@ namespace XiboClientWatchdog
 {
     public partial class Tray : Form
     {
+        public delegate void StatusDelegate(string status);
+
         private Watcher _watcher;
         private Thread _watchThread;
 
@@ -39,15 +42,70 @@ namespace XiboClientWatchdog
         {
             InitializeComponent();
 
+            FormClosing += Tray_FormClosing;
+
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             
             WindowState = FormWindowState.Minimized;
             ShowInTaskbar = false;
-        
+
+            // Process any command line parameters
+            ArgvConfigSource source = new ArgvConfigSource(Environment.GetCommandLineArgs());
+            source.AddSwitch("Main", "watch-process", "p");
+            source.AddSwitch("Main", "library", "l");
+                    
+            // Create a watcher
+            _watcher = new Watcher(source);
+            _watcher.OnNotifyActivity += _watcher_OnNotifyActivity;
+            _watcher.OnNotifyRestart += _watcher_OnNotifyRestart;
+
             // Start a thread for the watcher
-            _watcher = new Watcher();
             _watchThread = new Thread(new ThreadStart(_watcher.Run));
             _watchThread.Start();
+        }
+
+        void _watcher_OnNotifyRestart(string message)
+        {
+            if (InvokeRequired)
+                BeginInvoke(new StatusDelegate(setRestartText), message);
+            else
+                setRestartText(message);
+        }
+
+        void _watcher_OnNotifyActivity()
+        {
+            if (InvokeRequired)
+                BeginInvoke(new StatusDelegate(setLastActivityText), "");
+            else
+                setLastActivityText("");
+        }
+
+        void setLastActivityText(string message)
+        {
+            toolStripLastActivity.Text = "Checked: " + DateTime.Now.ToString();
+        }
+
+        void setRestartText(string message)
+        {
+            string formattedMessage = "Restarted: " + DateTime.Now.ToString() + " " + message;
+
+            showBalloon("Restarting", formattedMessage);
+            
+            // Also store on the tool strip
+            toolStripLastRestart.Text = formattedMessage;
+        }
+
+        void showBalloon(string title, string message)
+        {
+            notifyIcon1.BalloonTipTitle = title;
+            notifyIcon1.BalloonTipText = message;
+            notifyIcon1.Visible = true;
+            notifyIcon1.ShowBalloonTip(3000);
+        }
+
+        void Tray_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            _watcher.Stop();
         }
 
         private void toolStripMenuItem1_Click(object sender, EventArgs e)

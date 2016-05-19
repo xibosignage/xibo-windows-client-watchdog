@@ -33,6 +33,8 @@
             this.notifyIcon1 = new System.Windows.Forms.NotifyIcon(this.components);
             this.notifyContextMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripLastActivity = new System.Windows.Forms.ToolStripTextBox();
+            this.toolStripLastRestart = new System.Windows.Forms.ToolStripTextBox();
             this.notifyContextMenu.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -46,16 +48,30 @@
             // notifyContextMenu
             // 
             this.notifyContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.toolStripLastActivity,
+            this.toolStripLastRestart,
             this.toolStripMenuItem1});
             this.notifyContextMenu.Name = "notifyContextMenu";
-            this.notifyContextMenu.Size = new System.Drawing.Size(93, 26);
+            this.notifyContextMenu.Size = new System.Drawing.Size(161, 98);
             // 
             // toolStripMenuItem1
             // 
             this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-            this.toolStripMenuItem1.Size = new System.Drawing.Size(92, 22);
+            this.toolStripMenuItem1.Size = new System.Drawing.Size(160, 22);
             this.toolStripMenuItem1.Text = "Exit";
             this.toolStripMenuItem1.Click += new System.EventHandler(this.toolStripMenuItem1_Click);
+            // 
+            // toolStripLastActivity
+            // 
+            this.toolStripLastActivity.Name = "toolStripLastActivity";
+            this.toolStripLastActivity.ReadOnly = true;
+            this.toolStripLastActivity.Size = new System.Drawing.Size(100, 23);
+            // 
+            // toolStripLastRestart
+            // 
+            this.toolStripLastRestart.Name = "toolStripLastRestart";
+            this.toolStripLastRestart.ReadOnly = true;
+            this.toolStripLastRestart.Size = new System.Drawing.Size(100, 23);
             // 
             // Tray
             // 
@@ -65,6 +81,7 @@
             this.Name = "Tray";
             this.Text = "Watch Dog";
             this.notifyContextMenu.ResumeLayout(false);
+            this.notifyContextMenu.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -74,6 +91,8 @@
         private System.Windows.Forms.NotifyIcon notifyIcon1;
         private System.Windows.Forms.ContextMenuStrip notifyContextMenu;
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem1;
+        private System.Windows.Forms.ToolStripTextBox toolStripLastActivity;
+        private System.Windows.Forms.ToolStripTextBox toolStripLastRestart;
     }
 }
 

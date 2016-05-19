@@ -1,4 +1,5 @@
-﻿/*
+﻿using Nini.Config;
+/*
  * Xibo - Digitial Signage - http://www.xibo.org.uk
  * Copyright (C) 2006 - 2014 Daniel Garner
  *
@@ -38,6 +39,21 @@ namespace XiboClientWatchdog
         private bool _forceStop = false;
         private ManualResetEvent _manualReset = new ManualResetEvent(false);
 
+        // Config
+        private ArgvConfigSource _config;
+
+        // Event to notify activity
+        public delegate void OnNotifyActivityDelegate();
+        public event OnNotifyActivityDelegate OnNotifyActivity;
+
+        public delegate void OnNotifyRestartDelegate(string message);
+        public event OnNotifyRestartDelegate OnNotifyRestart;
+
+        public Watcher(ArgvConfigSource config)
+        {
+            _config = config;
+        }
+
         /// <summary>
         /// Stops the thread
         /// </summary>
@@ -61,12 +77,18 @@ namespace XiboClientWatchdog
                         // If we are restarting, reset
                         _manualReset.Reset();
 
+                        if (_forceStop)
+                            break;
+
+                        string clientLibrary = _config.Configs["Main"].GetString("library", Settings.Default.ClientLibrary);
+                        string processPath = _config.Configs["Main"].GetString("watch-process", Settings.Default.ProcessPath);
+
                         string status = null;
 
                         // Look in the Xibo library for the status.json file
-                        if (File.Exists(Path.Combine(Settings.Default.ClientLibrary, "status.json")))
+                        if (File.Exists(Path.Combine(clientLibrary, "status.json")))
                         {
-                            using (StreamReader reader = new StreamReader(Path.Combine(Settings.Default.ClientLibrary, "status.json")))
+                            using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
                             {
                                 status = reader.ReadToEnd();
                             }
@@ -74,7 +96,7 @@ namespace XiboClientWatchdog
 
                         // Compare the last accessed date with the current date and threshold
                         if (string.IsNullOrEmpty(status))
-                            throw new Exception("Unable to find status file in " + Settings.Default.ClientLibrary);
+                            throw new Exception("Unable to find status file in " + clientLibrary);
 
                         // Load the status file in to a JSON string
                         var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
@@ -89,7 +111,7 @@ namespace XiboClientWatchdog
                             // We need to do something about this - client hasn't checked in recently enough
 
                             // Check to see if XiboClient.exe is still running
-                            Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(Settings.Default.ProcessPath));
+                            Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processPath));
 
                             if (proc.Length > 0)
                             {
@@ -100,16 +122,26 @@ namespace XiboClientWatchdog
                                 }
                             }
 
-                            WriteToXiboLog(string.Format("Client inactive with {0} processes", proc.Length));
+                            string message = string.Format("Client inactive with {0} processes", proc.Length);
+
+                            // Write message to log
+                            WriteToXiboLog(message);
+
+                            // Notify message
+                            if (OnNotifyRestart != null)
+                                OnNotifyRestart(message);
 
                             // Start the exe's
-                            Process.Start(Settings.Default.ProcessPath);
+                            Process.Start(processPath);
                         }
                     }
                     catch (Exception e)
                     {
                         Trace.WriteLine(e.Message);
                     }
+
+                    if (OnNotifyActivity != null)
+                        OnNotifyActivity();
 
                     // Sleep this thread until the next collection interval
                     _manualReset.WaitOne((int)Settings.Default.PollingInterval * 1000);

@@ -92,7 +92,7 @@ namespace XiboClientWatchdog
                         if (proc.Length <= 0)
                         {
                             string message = "No active processes";
-                            WriteToXiboLog(message);
+                            WriteToXiboLog(clientLibrary, message);
 
                             // Notify message
                             if (OnNotifyRestart != null)
@@ -142,7 +142,7 @@ namespace XiboClientWatchdog
                                 string message = string.Format("Activity threshold exceeded. There are {0} processes", proc.Length);
 
                                 // Write message to log
-                                WriteToXiboLog(message);
+                                WriteToXiboLog(clientLibrary, message);
 
                                 // Notify message
                                 if (OnNotifyRestart != null)
@@ -168,22 +168,15 @@ namespace XiboClientWatchdog
             }
         }
 
-        private void WriteToXiboLog(string message)
+        private void WriteToXiboLog(string clientLibrary, string message)
         {
             // The log is contained in the library folder
-            try
-            {
-                string _logPath = Path.Combine(Settings.Default.ClientLibrary, Settings.Default.LogFileName);
+            string _logPath = Path.Combine(clientLibrary, Settings.Default.LogFileName);
 
-                // Open the Text Writer
-                using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
-                {
-                    tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "Watchdog", message));
-                }
-            }
-            catch
+            // Open the Text Writer
+            using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
             {
-                // What can we do?
+                tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "error", message));
             }
         }
     }

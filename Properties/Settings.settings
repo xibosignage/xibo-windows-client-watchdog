@@ -2,20 +2,23 @@
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="XiboClientWatchdog.Properties" GeneratedClassName="Settings">
   <Profiles />
   <Settings>
-    <Setting Name="ClientLibrary" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">C:\Users\dan\Documents\Xibo Library</Value>
-    </Setting>
-    <Setting Name="PollingInterval" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">120</Value>
-    </Setting>
-    <Setting Name="Threshold" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">300</Value>
-    </Setting>
-    <Setting Name="ProcessPath" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">C:\Users\dan\www\1.7\client-watchdog\client\dotNET\bin\x86\Release\XiboClient.exe</Value>
-    </Setting>
     <Setting Name="LogFileName" Type="System.String" Scope="Application">
       <Value Profile="(Default)">log.xml</Value>
+    </Setting>
+    <Setting Name="ClientLibrary" Type="System.String" Scope="Application">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="PollingInterval" Type="System.Int32" Scope="Application">
+      <Value Profile="(Default)">60</Value>
+    </Setting>
+    <Setting Name="Threshold" Type="System.Int32" Scope="Application">
+      <Value Profile="(Default)">120</Value>
+    </Setting>
+    <Setting Name="ProcessPath" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">C:\Program Files (x86)\Xibo Player\XiboClient.exe</Value>
+    </Setting>
+    <Setting Name="MemoryThreshold" Type="System.Single" Scope="Application">
+      <Value Profile="(Default)">90</Value>
     </Setting>
   </Settings>
 </SettingsFile>

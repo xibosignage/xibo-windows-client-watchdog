@@ -1,4 +1,5 @@
-﻿using Nini.Config;
+﻿using Microsoft.VisualBasic.Devices;
+using Nini.Config;
 /*
  * Xibo - Digitial Signage - http://www.xibo.org.uk
  * Copyright (C) 2006 - 2014 Daniel Garner
@@ -129,27 +130,33 @@ namespace XiboClientWatchdog
                             if (lastActive < threshold)
                             {
                                 // We need to do something about this - client hasn't checked in recently enough
-                                // Check to see if XiboClient.exe is still running
-                                if (proc.Length > 0)
+                                // Stop any matching exe's (kill them)
+                                foreach (Process process in proc)
                                 {
-                                    // Stop the exe's (kill them)
-                                    foreach (Process process in proc)
+                                    process.Kill();
+                                }
+
+                                restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
+                            }
+                            else if (Settings.Default.MemoryThreshold > 0)
+                            {
+                                // Check the active memory usage of the processes
+                                bool memoryExceeded = false;
+                                long totalMemory = (long)new ComputerInfo().TotalPhysicalMemory;
+                                float percentUsed = 0;
+
+                                foreach (Process process in proc)
+                                {
+                                    percentUsed = ((float)process.PrivateMemorySize64 / (float)totalMemory) * 100;
+                                    if (memoryExceeded || percentUsed > Settings.Default.MemoryThreshold)
                                     {
                                         process.Kill();
+                                        memoryExceeded = true;
                                     }
                                 }
 
-                                string message = string.Format("Activity threshold exceeded. There are {0} processes", proc.Length);
-
-                                // Write message to log
-                                WriteToXiboLog(clientLibrary, message);
-
-                                // Notify message
-                                if (OnNotifyRestart != null)
-                                    OnNotifyRestart(message);
-
-                                // Start the exe's
-                                Process.Start(processPath);
+                                if (memoryExceeded)
+                                    restartProcess(clientLibrary, processPath, string.Format("Memory threshold exceeded. {0} used", percentUsed));
                             }
                         }
                     }
@@ -166,6 +173,19 @@ namespace XiboClientWatchdog
                     _manualReset.WaitOne((int)Settings.Default.PollingInterval * 1000);
                 }
             }
+        }
+
+        private void restartProcess(string clientLibrary, string processPath, string message)
+        {
+            // Write message to log
+            WriteToXiboLog(clientLibrary, message);
+
+            // Notify message
+            if (OnNotifyRestart != null)
+                OnNotifyRestart(message);
+
+            // Start the exe's
+            Process.Start(processPath);
         }
 
         private void WriteToXiboLog(string clientLibrary, string message)

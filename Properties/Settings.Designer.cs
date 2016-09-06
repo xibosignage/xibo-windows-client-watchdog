@@ -103,5 +103,14 @@ namespace XiboClientWatchdog.Properties {
                 return ((int)(this["SleepAfterKillSeconds"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public int NotRespondingThreshold {
+            get {
+                return ((int)(this["NotRespondingThreshold"]));
+            }
+        }
     }
 }

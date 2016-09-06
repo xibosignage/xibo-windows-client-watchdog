@@ -99,11 +99,10 @@ namespace XiboClientWatchdog
                             if (OnNotifyRestart != null)
                                 OnNotifyRestart(message);
 
-                            Process.Start(processPath);
+                            startProcess(processPath);
                         }
                         else
                         {
-
                             string status = null;
 
                             // Look in the Xibo library for the status.json file
@@ -133,7 +132,7 @@ namespace XiboClientWatchdog
                                 // Stop any matching exe's (kill them)
                                 foreach (Process process in proc)
                                 {
-                                    process.Kill();
+                                    killProcess(process, "Killing process - activity threshold exceeded");
                                 }
 
                                 restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
@@ -150,7 +149,7 @@ namespace XiboClientWatchdog
                                     percentUsed = ((float)process.PrivateMemorySize64 / (float)totalMemory) * 100;
                                     if (memoryExceeded || percentUsed > Settings.Default.MemoryThreshold)
                                     {
-                                        process.Kill();
+                                        killProcess(process, "Killing process - memory threshold exceeded");
                                         memoryExceeded = true;
                                     }
                                 }
@@ -175,6 +174,81 @@ namespace XiboClientWatchdog
             }
         }
 
+        /// <summary>
+        /// Start process
+        /// </summary>
+        /// <param name="processPath"></param>
+        private void startProcess(string processPath)
+        {
+            if (Settings.Default.StartWithCmd)
+            {
+                try
+                {
+                    Process process = new Process();
+                    ProcessStartInfo info = new ProcessStartInfo();
+
+                    info.CreateNoWindow = true;
+                    info.WindowStyle = ProcessWindowStyle.Hidden;
+                    info.FileName = "cmd.exe";
+                    info.Arguments = "/c start \"player\" \"" + processPath + "\"";
+
+                    process.StartInfo = info;
+                    process.Start();
+                }
+                catch (Exception e)
+                {
+                    if (OnNotifyError != null)
+                        OnNotifyError(e.ToString());
+                }
+            }
+            else
+            {
+                Process.Start(processPath);
+            }
+        }
+
+        /// <summary>
+        /// Kill process
+        /// </summary>
+        /// <param name="killProcess"></param>
+        private void killProcess(Process killProcess, string message)
+        {
+            // Notify message
+            if (OnNotifyRestart != null)
+                OnNotifyRestart(message);
+
+            if (Settings.Default.UseTaskKill)
+            {
+                using (Process process = new Process())
+                {
+                    ProcessStartInfo startInfo = new ProcessStartInfo();
+
+                    startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                    startInfo.FileName = "taskkill.exe";
+                    // Kill using processId, kill tree, force
+                    startInfo.Arguments = "/pid " + killProcess.Id.ToString() + " /t /f";
+
+                    process.StartInfo = startInfo;
+                    process.Start();
+                }
+            }
+            else
+            {
+                killProcess.Kill();
+            }
+
+            int sleep = Settings.Default.SleepAfterKillSeconds;
+
+            if (sleep > 0)
+                Thread.Sleep(sleep * 1000);
+        }
+
+        /// <summary>
+        /// Restart Process
+        /// </summary>
+        /// <param name="clientLibrary"></param>
+        /// <param name="processPath"></param>
+        /// <param name="message"></param>
         private void restartProcess(string clientLibrary, string processPath, string message)
         {
             // Write message to log
@@ -185,9 +259,14 @@ namespace XiboClientWatchdog
                 OnNotifyRestart(message);
 
             // Start the exe's
-            Process.Start(processPath);
+            startProcess(processPath);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="clientLibrary"></param>
+        /// <param name="message"></param>
         private void WriteToXiboLog(string clientLibrary, string message)
         {
             // The log is contained in the library folder

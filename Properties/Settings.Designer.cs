@@ -76,5 +76,32 @@ namespace XiboClientWatchdog.Properties {
                 return ((float)(this["MemoryThreshold"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool UseTaskKill {
+            get {
+                return ((bool)(this["UseTaskKill"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool StartWithCmd {
+            get {
+                return ((bool)(this["StartWithCmd"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int SleepAfterKillSeconds {
+            get {
+                return ((int)(this["SleepAfterKillSeconds"]));
+            }
+        }
     }
 }

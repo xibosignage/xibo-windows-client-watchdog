@@ -54,6 +54,7 @@ namespace XiboClientWatchdog
         public event OnNotifyErrorDelegate OnNotifyError;
 
         private int _notRespondingCounter = 0;
+        private DateTime _lastCheck;
 
         public Watcher(ArgvConfigSource config)
         {
@@ -74,6 +75,8 @@ namespace XiboClientWatchdog
         /// </summary>
         public void Run()
         {
+            _lastCheck = DateTime.MinValue;
+
             while (!_forceStop)
             {
                 lock (_locker)
@@ -89,111 +92,138 @@ namespace XiboClientWatchdog
                         string clientLibrary = _config.Configs["Main"].GetString("library", Settings.Default.ClientLibrary);
                         string processPath = _config.Configs["Main"].GetString("watch-process", Settings.Default.ProcessPath);
 
+                        // Are we in a check period that should kill the player?
+                        bool killPlayerPeriod = false;
+
+                        if (!string.IsNullOrEmpty(Settings.Default.PlayerRestartTime))
+                        {
+                            // Parse the player restart time
+                            DateTime now = DateTime.Now;
+                            DateTime nextTime = now.AddSeconds((int)Settings.Default.PollingInterval);
+                            DateTime playerRestartTime = DateTime.Parse(now.ToShortDateString() + " " + Settings.Default.PlayerRestartTime);
+
+                            killPlayerPeriod = (playerRestartTime >= _lastCheck && playerRestartTime < nextTime);
+                        }
+
                         // Check if my Xibo process is running.
                         Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processPath));
 
                         if (proc.Length <= 0)
                         {
-                            string message = "No active processes";
-                            WriteToXiboLog(clientLibrary, message);
+                            if (!killPlayerPeriod)
+                            {
+                                string message = "No active processes";
+                                WriteToXiboLog(clientLibrary, message);
 
-                            // Notify message
-                            if (OnNotifyRestart != null)
-                                OnNotifyRestart(message);
+                                // Notify message
+                                if (OnNotifyRestart != null)
+                                    OnNotifyRestart(message);
 
-                            startProcess(processPath);
+                                startProcess(processPath);
+                            }
                         }
                         else
                         {
-                            // Check the process is responding
-                            bool notResponding = false;
-
-                            if (Settings.Default.NotRespondingThreshold > 0)
+                            // Process running
+                            if (killPlayerPeriod)
                             {
                                 foreach (Process process in proc)
                                 {
-                                    if (!process.Responding)
-                                    {
-                                        _notRespondingCounter++;
-
-                                        if (_notRespondingCounter >= Settings.Default.NotRespondingThreshold)
-                                        {
-                                            // Kill process
-                                            killProcess(process, "Killing process - process UI not responding after " + _notRespondingCounter + " checks.");
-
-                                            // Update flags
-                                            _notRespondingCounter = 0;
-                                            notResponding = true;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // If we detect any responding process, set the counter to 0.
-                                        _notRespondingCounter = 0;
-                                    }
+                                    killProcess(process, "Killing process - player restart period.");
                                 }
-                            }
-
-                            if (notResponding)
-                            {
-                                restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
                             }
                             else
                             {
-                                // Check status
-                                string status = null;
+                                // Check the process is responding
+                                bool notResponding = false;
 
-                                // Look in the Xibo library for the status.json file
-                                if (File.Exists(Path.Combine(clientLibrary, "status.json")))
+                                if (Settings.Default.NotRespondingThreshold > 0)
                                 {
-                                    using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
+                                    foreach (Process process in proc)
                                     {
-                                        status = reader.ReadToEnd();
+                                        if (!process.Responding)
+                                        {
+                                            _notRespondingCounter++;
+
+                                            if (_notRespondingCounter >= Settings.Default.NotRespondingThreshold)
+                                            {
+                                                // Kill process
+                                                killProcess(process, "Killing process - process UI not responding after " + _notRespondingCounter + " checks.");
+
+                                                // Update flags
+                                                _notRespondingCounter = 0;
+                                                notResponding = true;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // If we detect any responding process, set the counter to 0.
+                                            _notRespondingCounter = 0;
+                                        }
                                     }
                                 }
 
-                                // Compare the last accessed date with the current date and threshold
-                                if (string.IsNullOrEmpty(status))
-                                    throw new Exception("Unable to find status file in " + clientLibrary);
-
-                                // Load the status file in to a JSON string
-                                var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
-
-                                DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
-
-                                // Set up the threshold
-                                DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
-
-                                if (lastActive < threshold)
+                                if (notResponding)
                                 {
-                                    // We need to do something about this - client hasn't checked in recently enough
-                                    // Stop any matching exe's (kill them)
-                                    foreach (Process process in proc)
-                                    {
-                                        killProcess(process, "Killing process - activity threshold exceeded");
-                                    }
-
                                     restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
                                 }
-                                else if (Settings.Default.MemoryThreshold > 0)
+                                else
                                 {
-                                    // Check the active memory usage of the processes
-                                    bool memoryExceeded = false;
-                                    long totalMemory = (long)new ComputerInfo().TotalPhysicalMemory;
-                                    float percentUsed = 0;
+                                    // Check status
+                                    string status = null;
 
-                                    foreach (Process process in proc)
+                                    // Look in the Xibo library for the status.json file
+                                    if (File.Exists(Path.Combine(clientLibrary, "status.json")))
                                     {
-                                        percentUsed = ((float)process.PrivateMemorySize64 / (float)totalMemory) * 100;
-                                        if (memoryExceeded || percentUsed > Settings.Default.MemoryThreshold)
+                                        using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
                                         {
-                                            killProcess(process, "Killing process - memory threshold exceeded");
-                                            memoryExceeded = true;
+                                            status = reader.ReadToEnd();
                                         }
                                     }
 
-                                    if (memoryExceeded)
-                                        restartProcess(clientLibrary, processPath, string.Format("Memory threshold exceeded. {0} used", percentUsed));
+                                    // Compare the last accessed date with the current date and threshold
+                                    if (string.IsNullOrEmpty(status))
+                                        throw new Exception("Unable to find status file in " + clientLibrary);
+
+                                    // Load the status file in to a JSON string
+                                    var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
+
+                                    DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
+
+                                    // Set up the threshold
+                                    DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
+
+                                    if (lastActive < threshold)
+                                    {
+                                        // We need to do something about this - client hasn't checked in recently enough
+                                        // Stop any matching exe's (kill them)
+                                        foreach (Process process in proc)
+                                        {
+                                            killProcess(process, "Killing process - activity threshold exceeded");
+                                        }
+
+                                        restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
+                                    }
+                                    else if (Settings.Default.MemoryThreshold > 0)
+                                    {
+                                        // Check the active memory usage of the processes
+                                        bool memoryExceeded = false;
+                                        long totalMemory = (long)new ComputerInfo().TotalPhysicalMemory;
+                                        float percentUsed = 0;
+
+                                        foreach (Process process in proc)
+                                        {
+                                            percentUsed = ((float)process.PrivateMemorySize64 / (float)totalMemory) * 100;
+                                            if (memoryExceeded || percentUsed > Settings.Default.MemoryThreshold)
+                                            {
+                                                killProcess(process, "Killing process - memory threshold exceeded");
+                                                memoryExceeded = true;
+                                            }
+                                        }
+
+                                        if (memoryExceeded)
+                                            restartProcess(clientLibrary, processPath, string.Format("Memory threshold exceeded. {0} used", percentUsed));
+                                    }
                                 }
                             }
                         }
@@ -206,6 +236,9 @@ namespace XiboClientWatchdog
 
                     if (OnNotifyActivity != null)
                         OnNotifyActivity();
+
+                    // Update the last time we checked
+                    _lastCheck = DateTime.Now;
 
                     // Sleep this thread until the next collection interval
                     _manualReset.WaitOne((int)Settings.Default.PollingInterval * 1000);

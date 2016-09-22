@@ -112,5 +112,14 @@ namespace XiboClientWatchdog.Properties {
                 return ((int)(this["NotRespondingThreshold"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string PlayerRestartTime {
+            get {
+                return ((string)(this["PlayerRestartTime"]));
+            }
+        }
     }
 }

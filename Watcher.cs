@@ -54,7 +54,7 @@ namespace XiboClientWatchdog
         public event OnNotifyErrorDelegate OnNotifyError;
 
         private int _notRespondingCounter = 0;
-        private DateTime _lastCheck;
+        private DateTime _lastCheck = DateTime.MinValue;
 
         public Watcher(ArgvConfigSource config)
         {
@@ -95,7 +95,7 @@ namespace XiboClientWatchdog
                         // Are we in a check period that should kill the player?
                         bool killPlayerPeriod = false;
 
-                        if (!string.IsNullOrEmpty(Settings.Default.PlayerRestartTime))
+                        if (!string.IsNullOrEmpty(Settings.Default.PlayerRestartTime) && _lastCheck != DateTime.MinValue)
                         {
                             // Parse the player restart time
                             DateTime now = DateTime.Now;

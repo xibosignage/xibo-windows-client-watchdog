@@ -1,4 +1,6 @@
-﻿/*
+﻿using Microsoft.VisualBasic.Devices;
+using Nini.Config;
+/*
  * Xibo - Digitial Signage - http://www.xibo.org.uk
  * Copyright (C) 2006 - 2014 Daniel Garner
  *
@@ -38,6 +40,27 @@ namespace XiboClientWatchdog
         private bool _forceStop = false;
         private ManualResetEvent _manualReset = new ManualResetEvent(false);
 
+        // Config
+        private ArgvConfigSource _config;
+
+        // Event to notify activity
+        public delegate void OnNotifyActivityDelegate();
+        public event OnNotifyActivityDelegate OnNotifyActivity;
+
+        public delegate void OnNotifyRestartDelegate(string message);
+        public event OnNotifyRestartDelegate OnNotifyRestart;
+
+        public delegate void OnNotifyErrorDelegate(string message);
+        public event OnNotifyErrorDelegate OnNotifyError;
+
+        private int _notRespondingCounter = 0;
+        private DateTime _lastCheck = DateTime.MinValue;
+
+        public Watcher(ArgvConfigSource config)
+        {
+            _config = config;
+        }
+
         /// <summary>
         /// Stops the thread
         /// </summary>
@@ -52,6 +75,8 @@ namespace XiboClientWatchdog
         /// </summary>
         public void Run()
         {
+            _lastCheck = DateTime.MinValue;
+
             while (!_forceStop)
             {
                 lock (_locker)
@@ -61,55 +86,159 @@ namespace XiboClientWatchdog
                         // If we are restarting, reset
                         _manualReset.Reset();
 
-                        string status = null;
+                        if (_forceStop)
+                            break;
 
-                        // Look in the Xibo library for the status.json file
-                        if (File.Exists(Path.Combine(Settings.Default.ClientLibrary, "status.json")))
+                        string clientLibrary = _config.Configs["Main"].GetString("library", Settings.Default.ClientLibrary);
+                        string processPath = _config.Configs["Main"].GetString("watch-process", Settings.Default.ProcessPath);
+
+                        // Are we in a check period that should kill the player?
+                        bool killPlayerPeriod = false;
+
+                        if (!string.IsNullOrEmpty(Settings.Default.PlayerRestartTime) && _lastCheck != DateTime.MinValue)
                         {
-                            using (StreamReader reader = new StreamReader(Path.Combine(Settings.Default.ClientLibrary, "status.json")))
-                            {
-                                status = reader.ReadToEnd();
-                            }
+                            // Parse the player restart time
+                            DateTime now = DateTime.Now;
+                            DateTime nextTime = now.AddSeconds((int)Settings.Default.PollingInterval);
+                            DateTime playerRestartTime = DateTime.Parse(now.ToShortDateString() + " " + Settings.Default.PlayerRestartTime);
+
+                            killPlayerPeriod = (playerRestartTime >= _lastCheck && playerRestartTime < nextTime);
                         }
 
-                        // Compare the last accessed date with the current date and threshold
-                        if (string.IsNullOrEmpty(status))
-                            throw new Exception("Unable to find status file in " + Settings.Default.ClientLibrary);
+                        // Check if my Xibo process is running.
+                        Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processPath));
 
-                        // Load the status file in to a JSON string
-                        var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
-
-                        DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
-
-                        // Set up the threshold
-                        DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
-
-                        if (lastActive < threshold)
+                        if (proc.Length <= 0)
                         {
-                            // We need to do something about this - client hasn't checked in recently enough
-
-                            // Check to see if XiboClient.exe is still running
-                            Process[] proc = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(Settings.Default.ProcessPath));
-
-                            if (proc.Length > 0)
+                            if (!killPlayerPeriod)
                             {
-                                // Stop the exe's (kill them)
+                                string message = "No active processes";
+                                WriteToXiboLog(clientLibrary, message);
+
+                                // Notify message
+                                if (OnNotifyRestart != null)
+                                    OnNotifyRestart(message);
+
+                                startProcess(processPath);
+                            }
+                        }
+                        else
+                        {
+                            // Process running
+                            if (killPlayerPeriod)
+                            {
                                 foreach (Process process in proc)
                                 {
-                                    process.Kill();
+                                    killProcess(process, "Killing process - player restart period.");
                                 }
                             }
+                            else
+                            {
+                                // Check the process is responding
+                                bool notResponding = false;
 
-                            WriteToXiboLog(string.Format("Client inactive with {0} processes", proc.Length));
+                                if (Settings.Default.NotRespondingThreshold > 0)
+                                {
+                                    foreach (Process process in proc)
+                                    {
+                                        if (!process.Responding)
+                                        {
+                                            _notRespondingCounter++;
 
-                            // Start the exe's
-                            Process.Start(Settings.Default.ProcessPath);
+                                            if (_notRespondingCounter >= Settings.Default.NotRespondingThreshold)
+                                            {
+                                                // Kill process
+                                                killProcess(process, "Killing process - process UI not responding after " + _notRespondingCounter + " checks.");
+
+                                                // Update flags
+                                                _notRespondingCounter = 0;
+                                                notResponding = true;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // If we detect any responding process, set the counter to 0.
+                                            _notRespondingCounter = 0;
+                                        }
+                                    }
+                                }
+
+                                if (notResponding)
+                                {
+                                    restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
+                                }
+                                else
+                                {
+                                    // Check status
+                                    string status = null;
+
+                                    // Look in the Xibo library for the status.json file
+                                    if (File.Exists(Path.Combine(clientLibrary, "status.json")))
+                                    {
+                                        using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
+                                        {
+                                            status = reader.ReadToEnd();
+                                        }
+                                    }
+
+                                    // Compare the last accessed date with the current date and threshold
+                                    if (string.IsNullOrEmpty(status))
+                                        throw new Exception("Unable to find status file in " + clientLibrary);
+
+                                    // Load the status file in to a JSON string
+                                    var dict = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(status);
+
+                                    DateTime lastActive = DateTime.Parse(dict["lastActivity"].ToString());
+
+                                    // Set up the threshold
+                                    DateTime threshold = DateTime.Now.AddSeconds(Settings.Default.Threshold * -1.0);
+
+                                    if (lastActive < threshold)
+                                    {
+                                        // We need to do something about this - client hasn't checked in recently enough
+                                        // Stop any matching exe's (kill them)
+                                        foreach (Process process in proc)
+                                        {
+                                            killProcess(process, "Killing process - activity threshold exceeded");
+                                        }
+
+                                        restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
+                                    }
+                                    else if (Settings.Default.MemoryThreshold > 0)
+                                    {
+                                        // Check the active memory usage of the processes
+                                        bool memoryExceeded = false;
+                                        long totalMemory = (long)new ComputerInfo().TotalPhysicalMemory;
+                                        float percentUsed = 0;
+
+                                        foreach (Process process in proc)
+                                        {
+                                            percentUsed = ((float)process.PrivateMemorySize64 / (float)totalMemory) * 100;
+                                            if (memoryExceeded || percentUsed > Settings.Default.MemoryThreshold)
+                                            {
+                                                killProcess(process, "Killing process - memory threshold exceeded");
+                                                memoryExceeded = true;
+                                            }
+                                        }
+
+                                        if (memoryExceeded)
+                                            restartProcess(clientLibrary, processPath, string.Format("Memory threshold exceeded. {0} used", percentUsed));
+                                    }
+                                }
+                            }
                         }
                     }
                     catch (Exception e)
                     {
-                        Trace.WriteLine(e.Message);
+                        if (OnNotifyError != null)
+                            OnNotifyError(e.ToString());
                     }
+
+                    if (OnNotifyActivity != null)
+                        OnNotifyActivity();
+
+                    // Update the last time we checked
+                    _lastCheck = DateTime.Now;
 
                     // Sleep this thread until the next collection interval
                     _manualReset.WaitOne((int)Settings.Default.PollingInterval * 1000);
@@ -117,22 +246,108 @@ namespace XiboClientWatchdog
             }
         }
 
-        private void WriteToXiboLog(string message)
+        /// <summary>
+        /// Start process
+        /// </summary>
+        /// <param name="processPath"></param>
+        private void startProcess(string processPath)
         {
-            // The log is contained in the library folder
-            try
+            if (Settings.Default.StartWithCmd)
             {
-                string _logPath = Path.Combine(Settings.Default.ClientLibrary, Settings.Default.LogFileName);
-
-                // Open the Text Writer
-                using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
+                try
                 {
-                    tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "Watchdog", message));
+                    Process process = new Process();
+                    ProcessStartInfo info = new ProcessStartInfo();
+
+                    info.CreateNoWindow = true;
+                    info.WindowStyle = ProcessWindowStyle.Hidden;
+                    info.FileName = "cmd.exe";
+                    info.Arguments = "/c start \"player\" \"" + processPath + "\"";
+
+                    process.StartInfo = info;
+                    process.Start();
+                }
+                catch (Exception e)
+                {
+                    if (OnNotifyError != null)
+                        OnNotifyError(e.ToString());
                 }
             }
-            catch
+            else
             {
-                // What can we do?
+                Process.Start(processPath);
+            }
+        }
+
+        /// <summary>
+        /// Kill process
+        /// </summary>
+        /// <param name="killProcess"></param>
+        private void killProcess(Process killProcess, string message)
+        {
+            // Notify message
+            if (OnNotifyRestart != null)
+                OnNotifyRestart(message);
+
+            if (Settings.Default.UseTaskKill)
+            {
+                using (Process process = new Process())
+                {
+                    ProcessStartInfo startInfo = new ProcessStartInfo();
+
+                    startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                    startInfo.FileName = "taskkill.exe";
+                    // Kill using processId, kill tree, force
+                    startInfo.Arguments = "/pid " + killProcess.Id.ToString() + " /t /f";
+
+                    process.StartInfo = startInfo;
+                    process.Start();
+                }
+            }
+            else
+            {
+                killProcess.Kill();
+            }
+
+            int sleep = Settings.Default.SleepAfterKillSeconds;
+
+            if (sleep > 0)
+                Thread.Sleep(sleep * 1000);
+        }
+
+        /// <summary>
+        /// Restart Process
+        /// </summary>
+        /// <param name="clientLibrary"></param>
+        /// <param name="processPath"></param>
+        /// <param name="message"></param>
+        private void restartProcess(string clientLibrary, string processPath, string message)
+        {
+            // Write message to log
+            WriteToXiboLog(clientLibrary, message);
+
+            // Notify message
+            if (OnNotifyRestart != null)
+                OnNotifyRestart(message);
+
+            // Start the exe's
+            startProcess(processPath);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="clientLibrary"></param>
+        /// <param name="message"></param>
+        private void WriteToXiboLog(string clientLibrary, string message)
+        {
+            // The log is contained in the library folder
+            string _logPath = Path.Combine(clientLibrary, Settings.Default.LogFileName);
+
+            // Open the Text Writer
+            using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
+            {
+                tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "error", message));
             }
         }
     }

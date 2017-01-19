@@ -39,9 +39,18 @@ namespace XiboClientWatchdog
         private Watcher _watcher;
         private Thread _watchThread;
 
+        private NotifyIcon notifyIcon;
+
         public Tray()
         {
             InitializeComponent();
+
+            // Create a notify icon
+            this.notifyIcon = new System.Windows.Forms.NotifyIcon(this.components);
+            this.notifyIcon.ContextMenuStrip = this.notifyContextMenu;
+            this.notifyIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            this.notifyIcon.Text = "Watch Dog";
+            this.notifyIcon.Visible = true;
 
             FormClosing += Tray_FormClosing;
 
@@ -120,10 +129,10 @@ namespace XiboClientWatchdog
 
         void showBalloon(string title, string message)
         {
-            notifyIcon1.BalloonTipTitle = title;
-            notifyIcon1.BalloonTipText = message;
-            notifyIcon1.Visible = true;
-            notifyIcon1.ShowBalloonTip(3000);
+            notifyIcon.BalloonTipTitle = title;
+            notifyIcon.BalloonTipText = message;
+            notifyIcon.Visible = true;
+            notifyIcon.ShowBalloonTip(3000);
         }
 
         void Tray_FormClosing(object sender, FormClosingEventArgs e)

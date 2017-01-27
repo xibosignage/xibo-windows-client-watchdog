@@ -121,5 +121,14 @@ namespace XiboClientWatchdog.Properties {
                 return ((string)(this["PlayerRestartTime"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public int ProcessCountThreshold {
+            get {
+                return ((int)(this["ProcessCountThreshold"]));
+            }
+        }
     }
 }

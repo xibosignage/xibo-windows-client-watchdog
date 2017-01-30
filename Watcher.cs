@@ -341,7 +341,14 @@ namespace XiboClientWatchdog
         private void restartProcess(string clientLibrary, string processPath, string message)
         {
             // Write message to log
-            WriteToXiboLog(clientLibrary, message);
+            try
+            {
+                WriteToXiboLog(clientLibrary, message);
+            }
+            catch (Exception e)
+            {
+                message += ". Unable to write to log: " + e.Message;
+            }
 
             // Notify message
             if (OnNotifyRestart != null)

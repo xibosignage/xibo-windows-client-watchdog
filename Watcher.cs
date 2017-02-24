@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -110,21 +111,33 @@ namespace XiboClientWatchdog
 
                         if (proc.Length <= 0)
                         {
+                            // There are no active processes at all
+                            // check we are not in a kill period
                             if (!killPlayerPeriod)
                             {
-                                string message = "No active processes";
-                                WriteToXiboLog(clientLibrary, message);
+                                // We are not in a kill period, so we would expect that there are active processes
+                                // restart the process.
+                                restartProcess(clientLibrary, processPath, "No active processes");
+                            }
+                        }
+                        else if (Settings.Default.ProcessCountThreshold > 0 && proc.Length > Settings.Default.ProcessCountThreshold)
+                        {
+                            // We have a process count threshold set, and the number of processes exceeds it.
+                            // kill all processes
+                            foreach (Process process in proc)
+                            {
+                                killProcess(process, "Killing process - process count threshold exceeded.");
+                            }
 
-                                // Notify message
-                                if (OnNotifyRestart != null)
-                                    OnNotifyRestart(message);
-
-                                startProcess(processPath);
+                            if (!killPlayerPeriod)
+                            {
+                                // We are not in a kill period, therefore we would expect a process to be running
+                                restartProcess(clientLibrary, processPath, "Too many active processes");
                             }
                         }
                         else
                         {
-                            // Process running
+                            // There are exactly the right quantity of processes running
                             if (killPlayerPeriod)
                             {
                                 foreach (Process process in proc)
@@ -151,33 +164,37 @@ namespace XiboClientWatchdog
                                                 killProcess(process, "Killing process - process UI not responding after " + _notRespondingCounter + " checks.");
 
                                                 // Update flags
-                                                _notRespondingCounter = 0;
                                                 notResponding = true;
                                             }
-                                        }
-                                        else
-                                        {
-                                            // If we detect any responding process, set the counter to 0.
-                                            _notRespondingCounter = 0;
                                         }
                                     }
                                 }
 
+                                // We've killed all not responding processes (or done nothing at all)
+                                // in either case, we set our counter to 0
+                                _notRespondingCounter = 0;
+
                                 if (notResponding)
                                 {
+                                    // We have done some killing
+                                    // make sure we restart
                                     restartProcess(clientLibrary, processPath, string.Format("Activity threshold exceeded. There are {0} processes", proc.Length));
                                 }
                                 else
                                 {
-                                    // Check status
+                                    // All processes are responding according to windows
+                                    // Check our own status.json file to make sure we've had some activity.
                                     string status = null;
 
                                     // Look in the Xibo library for the status.json file
                                     if (File.Exists(Path.Combine(clientLibrary, "status.json")))
                                     {
-                                        using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
+                                        using (FileStream file = new FileStream(Path.Combine(clientLibrary, "status.json"), FileMode.Open, FileAccess.Read))
                                         {
-                                            status = reader.ReadToEnd();
+                                            using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
+                                            {
+                                                status = reader.ReadToEnd();
+                                            }
                                         }
                                     }
 
@@ -324,7 +341,14 @@ namespace XiboClientWatchdog
         private void restartProcess(string clientLibrary, string processPath, string message)
         {
             // Write message to log
-            WriteToXiboLog(clientLibrary, message);
+            try
+            {
+                WriteToXiboLog(clientLibrary, message);
+            }
+            catch (Exception e)
+            {
+                message += ". Unable to write to log: " + e.Message;
+            }
 
             // Notify message
             if (OnNotifyRestart != null)
@@ -344,10 +368,16 @@ namespace XiboClientWatchdog
             // The log is contained in the library folder
             string _logPath = Path.Combine(clientLibrary, Settings.Default.LogFileName);
 
+            string formattedMessage;
+
+            formattedMessage = string.Format("<thread>{0}</thread>", "Watcher");
+            formattedMessage += string.Format("<method>{0}</method>", "Watchdog");
+            formattedMessage += string.Format("<message>{0}</message>", SecurityElement.Escape(message));
+
             // Open the Text Writer
             using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
             {
-                tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "error", message));
+                tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "error", formattedMessage));
             }
         }
     }

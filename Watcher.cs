@@ -82,6 +82,7 @@ namespace XiboClientWatchdog
             {
                 lock (_locker)
                 {
+                    string extWatchdog = _config.Configs["Main"].GetString("watchdog-process", Settings.Default.ExtWatchdogPath);
                     try
                     {
                         // If we are restarting, reset
@@ -256,6 +257,11 @@ namespace XiboClientWatchdog
 
                     // Update the last time we checked
                     _lastCheck = DateTime.Now;
+
+                    // Trigger Hardware Watchdog
+                    if (!string.IsNullOrEmpty(extWatchdog)) {
+                        startProcess(extWatchdog);
+                    }
 
                     // Sleep this thread until the next collection interval
                     _manualReset.WaitOne((int)Settings.Default.PollingInterval * 1000);

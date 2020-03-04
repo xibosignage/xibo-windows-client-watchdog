@@ -190,7 +190,7 @@ namespace XiboClientWatchdog
                                     // Look in the Xibo library for the status.json file
                                     if (File.Exists(Path.Combine(clientLibrary, "status.json")))
                                     {
-                                        using (FileStream file = new FileStream(Path.Combine(clientLibrary, "status.json"), FileMode.Open, FileAccess.Read))
+                                        using (FileStream file = new FileStream(Path.Combine(clientLibrary, "status.json"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                                         {
                                             using (StreamReader reader = new StreamReader(Path.Combine(clientLibrary, "status.json")))
                                             {

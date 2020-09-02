@@ -360,6 +360,12 @@ namespace XiboClientWatchdog
             if (OnNotifyRestart != null)
                 OnNotifyRestart(message);
 
+            // Kill of any Edge Browser Hosts if configured to do so
+            if (Settings.Default.AutoRemoveEdgeProcesses)
+            {
+                AutoRemoveEdgeProcesses(clientLibrary);
+            }
+
             // Start the exe's
             startProcess(processPath);
         }
@@ -384,6 +390,34 @@ namespace XiboClientWatchdog
             using (StreamWriter tw = new StreamWriter(File.Open(string.Format("{0}_{1}", _logPath, DateTime.Now.ToFileTimeUtc().ToString()), FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8))
             {
                 tw.WriteLine(string.Format("<trace date=\"{0}\" category=\"{1}\">{2}</trace>", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "error", formattedMessage));
+            }
+        }
+
+        /// <summary>
+        /// Automatically remove any edge processes for my user.
+        /// </summary>
+        private void AutoRemoveEdgeProcesses(string clientLibrary)
+        {
+            try
+            {
+                foreach (Process process in Process.GetProcessesByName("Win32WebViewHost"))
+                {
+                    process.Kill();
+                }
+
+                foreach (Process process in Process.GetProcessesByName("WWAHost"))
+                {
+                    process.Kill();
+                }
+
+                foreach (Process process in Process.GetProcessesByName("RuntimeBroker"))
+                {
+                    process.Kill();
+                }
+            } 
+            catch (Exception e)
+            {
+                WriteToXiboLog(clientLibrary, "AutoRemoveEdgeProcesses:" + e.Message);
             }
         }
     }

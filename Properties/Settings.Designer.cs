@@ -148,5 +148,14 @@ namespace XiboClientWatchdog.Properties {
                 return ((bool)(this["AutoRemoveEdgeProcesses"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool IsShowBalloons {
+            get {
+                return ((bool)(this["IsShowBalloons"]));
+            }
+        }
     }
 }

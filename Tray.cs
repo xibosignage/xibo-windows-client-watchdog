@@ -1,7 +1,6 @@
-﻿using Nini.Config;
-/*
- * Xibo - Digitial Signage - http://www.xibo.org.uk
- * Copyright (C) 2006 - 2014 Daniel Garner
+﻿/*
+ * Xibo - Digitial Signage - http://xibo.org.uk
+ * Copyright (C) 2006 - 2021 Xibo Signage Ltd
  *
  * This file is part of Xibo.
  *
@@ -18,15 +17,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Xibo.  If not, see <http://www.gnu.org/licenses/>.
  */
+using Nini.Config;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using XiboClientWatchdog.Properties;
 
@@ -129,10 +123,13 @@ namespace XiboClientWatchdog
 
         void showBalloon(string title, string message)
         {
-            notifyIcon.BalloonTipTitle = title;
-            notifyIcon.BalloonTipText = message;
-            notifyIcon.Visible = true;
-            notifyIcon.ShowBalloonTip(3000);
+            if (Settings.Default.IsShowBalloons)
+            {
+                notifyIcon.BalloonTipTitle = title;
+                notifyIcon.BalloonTipText = message;
+                notifyIcon.Visible = true;
+                notifyIcon.ShowBalloonTip(3000);
+            }
         }
 
         void Tray_FormClosing(object sender, FormClosingEventArgs e)

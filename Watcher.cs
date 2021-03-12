@@ -1,8 +1,6 @@
-﻿using Microsoft.VisualBasic.Devices;
-using Nini.Config;
-/*
- * Xibo - Digitial Signage - http://www.xibo.org.uk
- * Copyright (C) 2006 - 2014 Daniel Garner
+﻿/*
+ * Xibo - Digitial Signage - http://xibo.org.uk
+ * Copyright (C) 2006 - 2021 Xibo Signage Ltd
  *
  * This file is part of Xibo.
  *
@@ -19,15 +17,15 @@ using Nini.Config;
  * You should have received a copy of the GNU Affero General Public License
  * along with Xibo.  If not, see <http://www.gnu.org/licenses/>.
  */
+using Microsoft.VisualBasic.Devices;
+using Nini.Config;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Security;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using XiboClientWatchdog.Properties;
 
@@ -248,12 +246,10 @@ namespace XiboClientWatchdog
                     }
                     catch (Exception e)
                     {
-                        if (OnNotifyError != null)
-                            OnNotifyError(e.ToString());
+                        OnNotifyError?.Invoke(e.ToString());
                     }
 
-                    if (OnNotifyActivity != null)
-                        OnNotifyActivity();
+                    OnNotifyActivity?.Invoke();
 
                     // Update the last time we checked
                     _lastCheck = DateTime.Now;
@@ -357,8 +353,7 @@ namespace XiboClientWatchdog
             }
 
             // Notify message
-            if (OnNotifyRestart != null)
-                OnNotifyRestart(message);
+            OnNotifyRestart?.Invoke(message);
 
             // Kill of any Edge Browser Hosts if configured to do so
             if (Settings.Default.AutoRemoveEdgeProcesses)
